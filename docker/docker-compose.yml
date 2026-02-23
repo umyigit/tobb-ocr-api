@@ -1,0 +1,20 @@
+services:
+  api:
+    container_name: tobb-ocr-api
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - ../.env
+    volumes:
+      - pdf_data:/tmp/tobb_pdfs
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    restart: unless-stopped
+
+volumes:
+  pdf_data:

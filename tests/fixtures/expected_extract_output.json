@@ -1,0 +1,19 @@
+{
+  "query": "ALTINKAYA ELEKTRONİK",
+  "total_processed": 3,
+  "successful": 2,
+  "results": [
+    {
+      "trade_name": "ALTINKAYA ELEKTRONİK CİHAZ KUTULARI SANAYİ TİCARET ANONİM ŞİRKETİ",
+      "registry_city": "Ankara",
+      "registry_no": "123456",
+      "publication_date": "15/03/2024",
+      "issue_no": "10987",
+      "notice_type": "KURULUS",
+      "source_pdf_url": "https://www.ticaretsicil.gov.tr/view/hizlierisim/pdf_goster.php?Guid=abc-123",
+      "raw_text": "Ticaret Sicil Mudurlugu: Ankara ...",
+      "parse_confidence": 0.8,
+      "error": null
+    }
+  ]
+}
