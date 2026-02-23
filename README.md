@@ -1,83 +1,82 @@
-# TOBB Ticaret Sicil Gazetesi OCR REST API
+# TOBB Trade Registry Gazette OCR REST API
 
-TOBB Ticaret Sicil Gazetesi üzerinde şirket bazlı arama yapan, ilgili gazete PDF'lerini indirip OCR ile işleyerek yapılandırılmış JSON dönen bir REST API.
+A REST API that searches companies on the TOBB Trade Registry Gazette, downloads the relevant gazette PDFs, processes them with OCR, and returns structured JSON.
 
-## Özellikler
+## Features
 
-- **Ünvan Sorgulama**: Ticaret ünvanı ile TOBB Ticaret Sicil Gazetesi'nde arama
-- **PDF OCR**: İki katmanlı OCR pipeline (pdfplumber text layer + OCRmyPDF fallback)
-- **Yapılandırılmış Çıktı**: Sicil ili, sicil no, yayın tarihi, sayı, ilan türü gibi alanları otomatik çıkarma
-- **CAPTCHA Çözümü**: Lokal Tesseract OCR ile etik captcha çözümü (3. parti servis yok)
-- **Otomatik Oturum Yönetimi**: PHP session takibi, 30dk TTL, otomatik yeniden giriş
-- **Kısmi Hata Toleransı**: Tek bir PDF hatası tüm batch'i durdurmaz
-- **Docker ile Kolay Deploy**: Tek komutla ayağa kalkar
+- **Trade Name Search**: Search the TOBB Trade Registry Gazette by trade name
+- **PDF OCR**: Two-tier OCR pipeline (pdfplumber text layer + OCRmyPDF fallback)
+- **Structured Output**: Automatically extracts registry city, registry no, publication date, issue no, notice type
+- **CAPTCHA Solving**: Ethical local Tesseract OCR captcha solving (no third-party services)
+- **Automatic Session Management**: PHP session tracking, 30min TTL, automatic re-authentication
+- **Partial Failure Tolerance**: A single PDF failure does not stop the entire batch
+- **Easy Docker Deployment**: Up and running with a single command
 
-## Gereksinimler
+## Requirements
 
 - Python 3.11+
 - Tesseract OCR (`tesseract-ocr`, `tesseract-ocr-tur`, `tesseract-ocr-eng`)
 - OCRmyPDF, Ghostscript, Unpaper
-- TOBB Ticaret Sicil Gazetesi üyelik bilgileri (email + şifre)
+- TOBB Trade Registry Gazette membership credentials (email + password)
 
-## Kurulum
+## Installation
 
-### Docker ile (Önerilen)
+### With Docker (Recommended)
 
 ```bash
-# 1. .env dosyasını oluştur ve TOBB login bilgilerini yaz
+# 1. Create the .env file and set your TOBB login credentials
 cp .env.example .env
-# .env içinde TOBB_LOGIN_EMAIL ve TOBB_LOGIN_PASSWORD değerlerini güncelle
+# Update TOBB_LOGIN_EMAIL and TOBB_LOGIN_PASSWORD in .env
 
-# 2. Docker image'ı build et ve çalıştır
+# 2. Build and run the Docker image
 docker build -t tobb-ocr-api -f docker/Dockerfile .
 docker run -p 8000:8000 tobb-ocr-api
 ```
 
-> **Kullanıcı Değişikliği:** Farklı bir TOBB hesabı kullanmak için `.env` dosyasındaki
-> `TOBB_LOGIN_EMAIL` ve `TOBB_LOGIN_PASSWORD` değerlerini güncelleyip
-> `docker build` komutunu tekrar çalıştırmanız yeterlidir.
+> **Switching Users:** To use a different TOBB account, update `TOBB_LOGIN_EMAIL` and
+> `TOBB_LOGIN_PASSWORD` in the `.env` file and re-run `docker build`.
 
-### Manuel Kurulum
+### Manual Installation
 
 ```bash
-# Sistem bağımlılıklar (Ubuntu/Debian)
+# System dependencies (Ubuntu/Debian)
 sudo apt install tesseract-ocr tesseract-ocr-tur tesseract-ocr-eng ocrmypdf ghostscript unpaper
 
-# Python ortamı
+# Python environment
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 
-# .env dosyasını oluştur
+# Create the .env file
 cp .env.example .env
-# .env içine TOBB login bilgilerini yaz
+# Set your TOBB login credentials in .env
 
-# Çalıştır
+# Run
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-## Konfigürasyon
+## Configuration
 
-Tüm ayarlar `.env` dosyası üzerinden yönetilir:
+All settings are managed via the `.env` file:
 
-| Değişken | Default | Açıklama |
+| Variable | Default | Description |
 |---|---|---|
 | `TOBB_BASE_URL` | `https://www.ticaretsicil.gov.tr` | Site URL |
-| `TOBB_LOGIN_EMAIL` | _(zorunlu)_ | Login email |
-| `TOBB_LOGIN_PASSWORD` | _(zorunlu)_ | Login şifre |
-| `REQUEST_TIMEOUT` | `30` | HTTP timeout (sn) |
-| `MAX_RETRIES` | `3` | Max HTTP retry |
-| `BACKOFF_FACTOR` | `0.5` | Exponential backoff çarpanı |
-| `VERIFY_SSL` | `false` | SSL doğrulama |
-| `OCR_LANG` | `tur+eng` | Tesseract dil(ler) |
-| `MAX_PDF_MB` | `20` | Max PDF boyutu (MB) |
-| `RATE_LIMIT_DELAY` | `1.0` | İstekler arası bekleme (sn) |
-| `CAPTCHA_MAX_ATTEMPTS` | `5` | Max captcha deneme |
-| `LOG_LEVEL` | `INFO` | Log seviyesi |
-| `PDF_DOWNLOAD_DIR` | `/tmp/tobb_pdfs` | Geçici PDF dizini |
-| `DEBUG` | `false` | Debug modu |
+| `TOBB_LOGIN_EMAIL` | _(required)_ | Login email |
+| `TOBB_LOGIN_PASSWORD` | _(required)_ | Login password |
+| `REQUEST_TIMEOUT` | `30` | HTTP timeout (seconds) |
+| `MAX_RETRIES` | `3` | Max HTTP retries |
+| `BACKOFF_FACTOR` | `0.5` | Exponential backoff factor |
+| `VERIFY_SSL` | `false` | SSL verification |
+| `OCR_LANG` | `tur+eng` | Tesseract language(s) |
+| `MAX_PDF_MB` | `20` | Max PDF size (MB) |
+| `RATE_LIMIT_DELAY` | `1.0` | Delay between requests (seconds) |
+| `CAPTCHA_MAX_ATTEMPTS` | `5` | Max captcha attempts |
+| `LOG_LEVEL` | `INFO` | Log level |
+| `PDF_DOWNLOAD_DIR` | `/tmp/tobb_pdfs` | Temporary PDF directory |
+| `DEBUG` | `false` | Debug mode |
 
-## API Kullanımı
+## API Usage
 
 ### Health Check
 
@@ -89,7 +88,7 @@ curl http://localhost:8000/api/v1/health
 {"status": "ok", "service": "tobb-ocr-rest-api"}
 ```
 
-### Ünvan Arama
+### Trade Name Search
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/search \
@@ -115,9 +114,9 @@ curl -X POST http://localhost:8000/api/v1/search \
 }
 ```
 
-### Tam Çıkarım (Arama + PDF + OCR + Parse)
+### Full Extraction (Search + PDF + OCR + Parse)
 
-Sadece `trade_name` girin, gerisini sistem halleder (login -> arama -> PDF indirme -> OCR -> parse).
+Just provide the `trade_name` and the system handles the rest (login -> search -> PDF download -> OCR -> parse).
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/extract \
@@ -147,35 +146,35 @@ curl -X POST http://localhost:8000/api/v1/extract \
 }
 ```
 
-## Hata Kodları
+## Error Codes
 
-Tüm hatalar deterministic JSON olarak döner:
+All errors are returned as deterministic JSON:
 
-| Kod | HTTP | Durum |
+| Code | HTTP | Description |
 |---|---|---|
-| `NOT_FOUND` | 404 | Arama sonucu boş |
-| `PDF_FETCH_FAILED` | 502 | PDF indirilemedi |
-| `OCR_FAILED` | 500 | Metin çıkarılmadı |
-| `PARSING_FAILED` | 422 | Yapısal alan çıkarılmadı |
-| `CAPTCHA_FAILED` | 503 | CAPTCHA çözülemedi |
-| `AUTH_FAILED` | 401 | TOBB login başarısız |
+| `NOT_FOUND` | 404 | No search results found |
+| `PDF_FETCH_FAILED` | 502 | PDF could not be downloaded |
+| `OCR_FAILED` | 500 | Text could not be extracted |
+| `PARSING_FAILED` | 422 | Structured fields could not be extracted |
+| `CAPTCHA_FAILED` | 503 | CAPTCHA could not be solved |
+| `AUTH_FAILED` | 401 | TOBB login failed |
 
-Örnek hata yanıtı:
+Example error response:
 
 ```json
 {"error_code": "NOT_FOUND", "message": "'XYZ' icin sonuc bulunamadi", "detail": "query=XYZ"}
 ```
 
-## Mimari
+## Architecture
 
 ```
-İstemci
+Client
   │
   ▼
-api (FastAPI endpoint'ler, validation, JSON response)
+api (FastAPI endpoints, validation, JSON response)
   │
   ▼
-extractor (orkestratör)
+extractor (orchestrator)
   ├── auth_client ──► captcha_handler ──► Tesseract OCR
   ├── search_client ─► captcha_handler
   ├── pdf_fetcher
@@ -185,34 +184,34 @@ extractor (orkestratör)
       parser (regex-based structured field extraction)
 ```
 
-| Katman | Dosya | Sorumluluk |
+| Layer | File | Responsibility |
 |---|---|---|
-| api | `app/api/` | Endpoint tanımları, validation, dependency injection |
-| auth_client | `app/services/auth_client.py` | TOBB login akışı |
+| api | `app/api/` | Endpoint definitions, validation, dependency injection |
+| auth_client | `app/services/auth_client.py` | TOBB login flow |
 | captcha_handler | `app/services/captcha_handler.py` | Captcha fetch, preprocess, OCR |
-| search_client | `app/services/search_client.py` | Ünvan sorgulama, HTML parse |
+| search_client | `app/services/search_client.py` | Trade name search, HTML parsing |
 | pdf_fetcher | `app/services/pdf_fetcher.py` | Authenticated PDF download |
-| ocr_pipeline | `app/services/ocr_pipeline.py` | İki katmanlı OCR |
+| ocr_pipeline | `app/services/ocr_pipeline.py` | Two-tier OCR |
 | parser | `app/services/parser.py` | Raw text -> structured fields |
-| extractor | `app/services/extractor.py` | Tüm servisleri birleştiren ana iş akışı |
+| extractor | `app/services/extractor.py` | Main workflow orchestrating all services |
 
-## Testler
+## Tests
 
 ```bash
-# Tüm testler
+# All tests
 pytest
 
-# Sadece unit testler
+# Unit tests only
 pytest tests/unit/
 
-# Sadece integration testler
+# Integration tests only
 pytest -m integration
 
-# Coverage raporu
+# Coverage report
 pytest --cov=app --cov-report=term-missing
 ```
 
-## Proje Yapısı
+## Project Structure
 
 ```
 tobb-ocr-rest-api/
@@ -222,13 +221,13 @@ tobb-ocr-rest-api/
 │   ├── api/
 │   │   ├── router.py            # Top-level router
 │   │   ├── deps.py              # FastAPI dependency injection
-│   │   └── v1/                  # health, search, extract endpoint'leri
-│   ├── schemas/                 # Pydantic request/response modelleri
-│   ├── services/                # İş mantığı katmanları
+│   │   └── v1/                  # health, search, extract endpoints
+│   ├── schemas/                 # Pydantic request/response models
+│   ├── services/                # Business logic layers
 │   ├── clients/                 # HTTP client factory, session manager
 │   ├── core/                    # Exceptions, logging, middleware
 │   └── utils/                   # UA rotation, retry, image processing
-├── tests/                       # unit, integration, contract testler
+├── tests/                       # unit, integration, contract tests
 ├── docker/
 │   ├── Dockerfile               # Multi-stage build
 │   └── docker-compose.yml
@@ -237,6 +236,6 @@ tobb-ocr-rest-api/
 └── pyproject.toml
 ```
 
-## Lisans
+## License
 
-Bu proje dahili kullanım için geliştirilmiştir.
+This project is developed for internal use.

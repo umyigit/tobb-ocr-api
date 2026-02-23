@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.core.exceptions import NotFoundError
@@ -47,9 +47,16 @@ class TestSearchFlow:
         ]
 
         with (
-            patch("app.services.search_client.SearchClient.search", return_value=mock_search_results),
-            patch("app.services.auth_client.AuthClient.ensure_authenticated", new_callable=AsyncMock),
-            patch("app.services.gazette_client.GazetteClient.search", return_value=mock_gazette_results),
+            patch(
+                "app.services.search_client.SearchClient.search", return_value=mock_search_results
+            ),
+            patch(
+                "app.services.auth_client.AuthClient.ensure_authenticated", new_callable=AsyncMock
+            ),
+            patch(
+                "app.services.gazette_client.GazetteClient.search",
+                return_value=mock_gazette_results,
+            ),
         ):
             resp = self.client.post("/api/v1/search", json={"trade_name": "ACME"})
             assert resp.status_code == 200

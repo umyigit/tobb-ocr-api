@@ -27,15 +27,11 @@ class TestPayloadValidation:
         assert resp.status_code == 422
 
     def test_extract_max_results_too_high(self):
-        resp = self.client.post(
-            "/api/v1/extract", json={"trade_name": "ACME", "max_results": 100}
-        )
+        resp = self.client.post("/api/v1/extract", json={"trade_name": "ACME", "max_results": 100})
         assert resp.status_code == 422
 
     def test_extract_max_results_too_low(self):
-        resp = self.client.post(
-            "/api/v1/extract", json={"trade_name": "ACME", "max_results": 0}
-        )
+        resp = self.client.post("/api/v1/extract", json={"trade_name": "ACME", "max_results": 0})
         assert resp.status_code == 422
 
     def test_health_response_shape(self):

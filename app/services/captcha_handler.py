@@ -38,11 +38,15 @@ class CaptchaHandler:
             try:
                 text = await self._fetch_and_ocr(endpoint)
                 if text:
-                    logger.info("captcha_solved", context=context, attempt=attempt, length=len(text))
+                    logger.info(
+                        "captcha_solved", context=context, attempt=attempt, length=len(text)
+                    )
                     return text
                 logger.warning("captcha_empty", context=context, attempt=attempt)
             except Exception:
-                logger.warning("captcha_attempt_failed", context=context, attempt=attempt, exc_info=True)
+                logger.warning(
+                    "captcha_attempt_failed", context=context, attempt=attempt, exc_info=True
+                )
 
         raise CaptchaError(
             message=f"Captcha {max_attempts} denemede cozulemedi",

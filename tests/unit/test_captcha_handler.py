@@ -61,6 +61,7 @@ class TestCaptchaHandler:
             patch("app.services.captcha_handler.pytesseract") as mock_tess,
         ):
             from PIL import Image
+
             mock_pp.return_value = Image.new("L", (100, 40))
             mock_tess.image_to_string.return_value = "A1B2"
 

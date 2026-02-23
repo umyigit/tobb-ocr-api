@@ -248,6 +248,7 @@ TSM_TO_ID: dict[str, str] = {
     "KARADENİZ EREĞLİ": "246",
 }
 
+
 def _normalize_turkish(text: str) -> str:
     """Normalize Turkish characters for case-insensitive comparison.
 

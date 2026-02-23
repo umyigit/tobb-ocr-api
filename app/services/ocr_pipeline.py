@@ -68,7 +68,8 @@ class OCRPipeline:
 
             cmd = [
                 "ocrmypdf",
-                "--language", self._settings.OCR_LANG,
+                "--language",
+                self._settings.OCR_LANG,
                 "--force-ocr",
                 "--deskew",
                 "--clean",

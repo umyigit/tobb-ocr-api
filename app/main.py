@@ -6,7 +6,7 @@ from typing import AsyncIterator
 from fastapi import FastAPI
 
 from app.api.router import api_router
-from app.clients.http_client import create_http_client, close_http_client
+from app.clients.http_client import close_http_client, create_http_client
 from app.config import Settings
 from app.core.exceptions import TOBBBaseError
 from app.core.logging import setup_logging

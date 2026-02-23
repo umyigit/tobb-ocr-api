@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from app.schemas.enums import ErrorCode, NoticeType
+from app.schemas.enums import ErrorCode
 from app.schemas.requests import ExtractRequest, SearchRequest
 from app.schemas.responses import (
     ErrorResponse,

@@ -10,8 +10,8 @@ from app.config import Settings
 from app.core.exceptions import NotFoundError
 from app.core.logging import get_logger
 from app.schemas.responses import SearchRecord
-from app.services.captcha_handler import CaptchaHandler
 from app.services import selectors
+from app.services.captcha_handler import CaptchaHandler
 
 logger = get_logger(__name__)
 

@@ -14,7 +14,9 @@ TOTAL_FIELDS = 5  # registry_city, registry_no, publication_date, issue_no, noti
 class GazetteParser:
     """Parses raw OCR text into structured gazette fields using regex patterns."""
 
-    REGISTRY_CITY = re.compile(r"Ticaret\s+Sicil.*?[Mm][uü]d[uü]rl[uü][gğ][uü]\s*[:\-]?\s*(.+?)(?:\n|$)", re.IGNORECASE)
+    REGISTRY_CITY = re.compile(
+        r"Ticaret\s+Sicil.*?[Mm][uü]d[uü]rl[uü][gğ][uü]\s*[:\-]?\s*(.+?)(?:\n|$)", re.IGNORECASE
+    )
     REGISTRY_NO = re.compile(r"Sicil\s+No\s*[:\-]?\s*(\d+)", re.IGNORECASE)
     PUBLICATION_DATE = re.compile(r"(\d{2}[./]\d{2}[./]\d{4})")
     ISSUE_NO = re.compile(r"[Ss]ay[iıİ]\s*[:\-]?\s*(\d+)")
