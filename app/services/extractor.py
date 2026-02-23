@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from app.core.exceptions import NotFoundError, OCRError
 from app.core.logging import get_logger
 from app.schemas.responses import ExtractResult, GazetteRecord
@@ -44,6 +46,7 @@ class Extractor:
 
         # 2. Unvan sorgulama -> ilan goruntuleme (always two-step)
         gazette_records = await self._search_gazette_via_unvan(trade_name)
+        gazette_records = sorted(gazette_records, key=self._date_sort_key, reverse=True)
         gazette_records = gazette_records[:max_results]
 
         if not gazette_records:
@@ -106,6 +109,17 @@ class Extractor:
                     all_gazette_records.append(gr)
 
         return all_gazette_records
+
+    @staticmethod
+    def _date_sort_key(record: GazetteRecord) -> datetime:
+        """Parse yayin_tarihi (DD/MM/YYYY or DD.MM.YYYY) for sorting. Unknown dates go last."""
+        if not record.yayin_tarihi:
+            return datetime.min
+        try:
+            cleaned = record.yayin_tarihi.replace(".", "/")
+            return datetime.strptime(cleaned, "%d/%m/%Y")
+        except (ValueError, TypeError):
+            return datetime.min
 
     async def _process_gazette_record(self, record: GazetteRecord) -> ExtractResult:
         """Fetch PDF, OCR, and parse a single gazette record."""

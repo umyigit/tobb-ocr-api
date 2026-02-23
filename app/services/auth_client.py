@@ -32,7 +32,34 @@ class AuthClient:
         """Login if session is expired or not yet established."""
         if self._session.is_authenticated:
             return
-        await self._login()
+        await self._login_with_retry()
+
+    async def _login_with_retry(self) -> None:
+        """Try login up to MAX_RETRIES times. Captcha errors or unexpected responses trigger retry."""
+        max_attempts = self._settings.MAX_RETRIES
+        last_error: Exception | None = None
+
+        for attempt in range(1, max_attempts + 1):
+            try:
+                await self._login()
+                return
+            except AuthError:
+                raise
+            except Exception as exc:
+                last_error = exc
+                logger.warning(
+                    "login_attempt_failed",
+                    attempt=attempt,
+                    max_attempts=max_attempts,
+                    error=str(exc),
+                )
+                if attempt < max_attempts:
+                    await asyncio.sleep(self._settings.RATE_LIMIT_DELAY * attempt)
+
+        raise AuthError(
+            message=f"TOBB login {max_attempts} denemede basarisiz",
+            detail=str(last_error) if last_error else None,
+        )
 
     async def _login(self) -> None:
         base = self._settings.TOBB_BASE_URL
