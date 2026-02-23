@@ -21,7 +21,21 @@ A REST API that searches companies on the TOBB Trade Registry Gazette, downloads
 
 ## Installation
 
-### With Docker (Recommended)
+### From GitHub Container Registry (Quickest)
+
+```bash
+# 1. Create .env with your TOBB credentials
+cat <<EOF > .env
+TOBB_LOGIN_EMAIL=your@email.com
+TOBB_LOGIN_PASSWORD=yourpassword
+EOF
+
+# 2. Pull and run
+docker pull ghcr.io/umyigittr/tobb-ocr-rest-api:latest
+docker run -p 8000:8000 --env-file .env ghcr.io/umyigittr/tobb-ocr-rest-api:latest
+```
+
+### Build Locally with Docker
 
 ```bash
 # 1. Create the .env file and set your TOBB login credentials
