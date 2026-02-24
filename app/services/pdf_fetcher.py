@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 import httpx
 from bs4 import BeautifulSoup
 
@@ -49,6 +51,13 @@ class PDFFetcher:
                 if pdf_url:
                     return await self._stream_pdf(pdf_url, max_bytes)
 
+                # Log a snippet of the HTML for debugging
+                snippet = resp.text[:500].replace("\n", " ")
+                logger.warning(
+                    "pdf_html_no_embed_found",
+                    url=url,
+                    html_snippet=snippet,
+                )
                 raise PDFFetchError(
                     message="PDF linki HTML sayfasinda bulunamadi",
                     detail=f"url={url}",
@@ -85,29 +94,70 @@ class PDFFetcher:
 
     @staticmethod
     def _extract_pdf_url_from_html(html: str, base_url: str) -> str | None:
-        """Extract PDF URL from an HTML page that embeds/iframes a PDF."""
+        """Extract PDF URL from an HTML page that embeds/iframes a PDF.
+
+        Tries multiple strategies in order:
+        1. <embed>, <iframe>, <object> tags (classic PDF embedding)
+        2. <meta http-equiv="refresh"> redirect
+        3. <a> tags with .pdf in href
+        4. JavaScript redirects (window.location, document.location, etc.)
+        5. Regex fallback for any quoted .pdf URL in the HTML
+        """
         soup = BeautifulSoup(html, "lxml")
 
-        # Check embed tag
+        # 1. Check embed tag
         embed = soup.select_one("embed[src]")
         if embed:
             src = embed.get("src", "")
             if src:
                 return _resolve_url(src, base_url)
 
-        # Check iframe tag
+        # 2. Check iframe tag
         iframe = soup.select_one("iframe[src]")
         if iframe:
             src = iframe.get("src", "")
             if src:
                 return _resolve_url(src, base_url)
 
-        # Check object tag
+        # 3. Check object tag
         obj = soup.select_one("object[data]")
         if obj:
             data = obj.get("data", "")
             if data:
                 return _resolve_url(data, base_url)
+
+        # 4. Check meta refresh redirect
+        meta = soup.select_one('meta[http-equiv="refresh" i]')
+        if meta:
+            content = meta.get("content", "")
+            match = re.search(r"url\s*=\s*(.+)", content, re.IGNORECASE)
+            if match:
+                url = match.group(1).strip().strip("'\"")
+                return _resolve_url(url, base_url)
+
+        # 5. Check <a> tags with .pdf in href
+        for a_tag in soup.select("a[href]"):
+            href = a_tag.get("href", "")
+            if href and ".pdf" in href.lower():
+                return _resolve_url(href, base_url)
+
+        # 6. Check JavaScript for redirect patterns
+        for script in soup.select("script"):
+            text = script.string or ""
+            for pattern in (
+                r'(?:window|document)\.location(?:\.href)?\s*=\s*["\']([^"\']+)["\']',
+                r"window\.open\s*\(\s*[\"']([^\"']+)[\"']",
+                r"location\.replace\s*\(\s*[\"']([^\"']+)[\"']",
+                r"location\.assign\s*\(\s*[\"']([^\"']+)[\"']",
+            ):
+                match = re.search(pattern, text)
+                if match:
+                    return _resolve_url(match.group(1), base_url)
+
+        # 7. Last resort: regex scan entire HTML for quoted .pdf URLs
+        pdf_match = re.search(r'["\']([^"\']*\.pdf(?:\?[^"\']*)?)["\']', html, re.IGNORECASE)
+        if pdf_match:
+            return _resolve_url(pdf_match.group(1), base_url)
 
         return None
 
@@ -115,6 +165,13 @@ class PDFFetcher:
         """Stream-download a PDF with size limit enforcement."""
         async with self._client.stream("GET", url) as resp:
             resp.raise_for_status()
+
+            content_type = resp.headers.get("content-type", "")
+            if "text/html" in content_type:
+                raise PDFFetchError(
+                    message="PDF linki HTML sayfasinda bulunamadi",
+                    detail=f"embedded URL returned HTML, url={url}",
+                )
 
             content_length = resp.headers.get("content-length")
             if content_length and int(content_length) > max_bytes:
@@ -135,6 +192,13 @@ class PDFFetcher:
                 chunks.append(chunk)
 
         pdf_data = b"".join(chunks)
+
+        if pdf_data[:4] != b"%PDF":
+            raise PDFFetchError(
+                message="PDF linki HTML sayfasinda bulunamadi",
+                detail=f"embedded content is not a valid PDF, url={url}",
+            )
+
         logger.info("pdf_fetched", url=url, size_bytes=len(pdf_data), mode="embedded")
         return pdf_data
 
@@ -143,6 +207,7 @@ def _resolve_url(src: str, base_url: str) -> str:
     """Resolve a potentially relative URL against a base URL."""
     from urllib.parse import urljoin
 
+    src = src.strip()
     if src.startswith("http"):
         return src
     # urljoin handles both absolute paths (/tmp_gazete/...) and relative paths correctly

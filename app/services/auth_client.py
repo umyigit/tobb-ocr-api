@@ -34,6 +34,14 @@ class AuthClient:
             return
         await self._login_with_retry()
 
+    async def logout(self) -> None:
+        """Logout from TOBB and clear session state."""
+        if not self._session.is_authenticated:
+            return
+        self._session.invalidate()
+        self._client.cookies.clear()
+        logger.info("logout_complete")
+
     async def _login_with_retry(self) -> None:
         """Try login up to MAX_RETRIES times. Captcha errors or unexpected responses trigger retry."""
         max_attempts = self._settings.MAX_RETRIES
@@ -43,8 +51,19 @@ class AuthClient:
             try:
                 await self._login()
                 return
-            except AuthError:
-                raise
+            except AuthError as exc:
+                # Missing credentials → no point retrying
+                if "bilgileri eksik" in exc.message:
+                    raise
+                last_error = exc
+                logger.warning(
+                    "login_attempt_failed",
+                    attempt=attempt,
+                    max_attempts=max_attempts,
+                    error=str(exc),
+                )
+                if attempt < max_attempts:
+                    await asyncio.sleep(self._settings.RATE_LIMIT_DELAY * attempt)
             except Exception as exc:
                 last_error = exc
                 logger.warning(

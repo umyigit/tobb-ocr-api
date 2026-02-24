@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from app.core.exceptions import NotFoundError, OCRError
+from app.core.exceptions import NotFoundError, OCRError, PDFFetchError
 from app.core.logging import get_logger
 from app.schemas.responses import ExtractResult, GazetteRecord
 from app.services.auth_client import AuthClient
@@ -68,6 +68,9 @@ class Extractor:
                 message="Hicbir PDF'den metin cikarilmadi",
                 detail=f"total_attempted={len(results)}",
             )
+
+        # Logout after successful extraction; next request will re-login
+        await self._auth.logout()
 
         return results
 
@@ -136,7 +139,7 @@ class Extractor:
             )
 
         try:
-            pdf_data = await self._pdf.fetch(record.pdf_url)
+            pdf_data = await self._fetch_pdf_with_reauth(record.pdf_url)
             raw_text = self._ocr.extract_text(pdf_data)
             parsed = self._parser.parse(raw_text)
 
@@ -169,3 +172,15 @@ class Extractor:
                 source_pdf_url=record.pdf_url,
                 error=str(exc),
             )
+
+    async def _fetch_pdf_with_reauth(self, url: str) -> bytes:
+        """Fetch PDF, re-authenticate and retry once if session seems expired."""
+        try:
+            return await self._pdf.fetch(url)
+        except PDFFetchError as exc:
+            if "HTML sayfasinda bulunamadi" not in exc.message:
+                raise
+            logger.warning("pdf_fetch_session_expired_suspected", url=url)
+            await self._auth.logout()
+            await self._auth.ensure_authenticated()
+            return await self._pdf.fetch(url)
