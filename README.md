@@ -9,6 +9,10 @@ A REST API that searches companies on the TOBB Trade Registry Gazette, downloads
 - **Structured Output**: Automatically extracts registry city, registry no, publication date, issue no, notice type
 - **CAPTCHA Solving**: Ethical local Tesseract OCR captcha solving (no third-party services)
 - **Automatic Session Management**: PHP session tracking, 30min TTL, automatic re-authentication
+- **Resilient Auth**: Login retries with cookie cleanup between attempts; session-level re-auth on failure
+- **Turkish Character Normalization**: Unicode NFC normalization for external systems (n8n, etc.) and automatic I→İ fallback via `unicode_tr`
+- **Search Retry**: Both `/search` and `/extract` retry each query twice with delay; if not found, retried with Turkish uppercase conversion (ASCII I→İ)
+- **PDF Re-auth**: If a PDF fetch returns HTML instead of PDF (expired session), the system re-authenticates and retries
 - **Partial Failure Tolerance**: A single PDF failure does not stop the entire batch
 - **Easy Docker Deployment**: Up and running with a single command
 
@@ -188,10 +192,13 @@ Client
 api (FastAPI endpoints, validation, JSON response)
   │
   ▼
-extractor (orchestrator)
+extractor (orchestrator, retry logic, Turkish normalization)
   ├── auth_client ──► captcha_handler ──► Tesseract OCR
+  │     └── login retry with cookie cleanup + session-level re-auth
   ├── search_client ─► captcha_handler
+  │     └── search retry on both /search and /extract (x2 original, x2 I→İ fallback, 2s delay)
   ├── pdf_fetcher
+  │     └── re-auth on expired session (HTML instead of PDF)
   └── ocr_pipeline ──► pdfplumber (Tier 1) / OCRmyPDF (Tier 2)
         │
         ▼
@@ -207,7 +214,7 @@ extractor (orchestrator)
 | pdf_fetcher | `app/services/pdf_fetcher.py` | Authenticated PDF download |
 | ocr_pipeline | `app/services/ocr_pipeline.py` | Two-tier OCR |
 | parser | `app/services/parser.py` | Raw text -> structured fields |
-| extractor | `app/services/extractor.py` | Main workflow orchestrating all services |
+| extractor | `app/services/extractor.py` | Main workflow orchestrating all services, search retry, Turkish normalization |
 
 ## Tests
 

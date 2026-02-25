@@ -49,6 +49,10 @@ class AuthClient:
 
         for attempt in range(1, max_attempts + 1):
             try:
+                if attempt > 1:
+                    # Clear stale cookies/session before retrying so we get a fresh PHP session
+                    self._client.cookies.clear()
+                    self._session.invalidate()
                 await self._login()
                 return
             except AuthError as exc:

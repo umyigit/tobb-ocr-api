@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import asyncio
+import unicodedata
 from datetime import datetime
 
-from app.core.exceptions import NotFoundError, OCRError, PDFFetchError
+import httpx
+from unicode_tr import unicode_tr as tr
+
+from app.core.exceptions import AuthError, NotFoundError, OCRError, PDFFetchError
 from app.core.logging import get_logger
 from app.schemas.responses import ExtractResult, GazetteRecord
 from app.services.auth_client import AuthClient
@@ -42,10 +47,16 @@ class Extractor:
     ) -> list[ExtractResult]:
         """Full extraction pipeline. User only provides trade_name."""
         # 1. Ensure authenticated session for gazette/PDF access
-        await self._auth.ensure_authenticated()
+        await self._ensure_auth_with_retry()
 
-        # 2. Unvan sorgulama -> ilan goruntuleme (always two-step)
-        gazette_records = await self._search_gazette_via_unvan(trade_name)
+        # 2. NFC normalize upfront (fixes decomposed Unicode from external systems)
+        trade_name = unicodedata.normalize("NFC", trade_name)
+
+        # 3. Unvan sorgulama -> ilan goruntuleme
+        #    Each query is tried twice (CAPTCHA/session may fail transiently).
+        #    If original text fails, retry with aggressive I→İ conversion.
+        gazette_records = await self._search_with_retry(trade_name)
+
         gazette_records = sorted(gazette_records, key=self._date_sort_key, reverse=True)
         gazette_records = gazette_records[:max_results]
 
@@ -73,6 +84,71 @@ class Extractor:
         await self._auth.logout()
 
         return results
+
+    async def _search_with_retry(self, trade_name: str) -> list[GazetteRecord]:
+        """Search with retries: try original text twice, then I→İ fallback twice.
+
+        A short delay is inserted between consecutive attempts so that
+        transient CAPTCHA / rate-limit issues have time to clear.
+        """
+        retry_delay = 2.0  # seconds between retry attempts
+
+        # --- attempt with original text (x2) ---
+        original_exc: Exception | None = None
+        for attempt in range(1, 3):
+            try:
+                return await self._search_gazette_via_unvan(trade_name)
+            except (NotFoundError, httpx.HTTPStatusError) as exc:
+                if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code != 404:
+                    raise
+                original_exc = exc
+                if attempt < 2:
+                    logger.info("search_failed_retrying", attempt=attempt, query=trade_name)
+                    await asyncio.sleep(retry_delay)
+
+        # --- fallback: aggressive I→İ conversion (x2) ---
+        turkish = self._ascii_to_turkish_upper(trade_name)
+        if turkish == trade_name:
+            raise original_exc  # type: ignore[misc]
+
+        logger.info(
+            "retrying_search_with_turkish_upper",
+            original=trade_name,
+            turkish=turkish,
+        )
+        for attempt in range(1, 3):
+            try:
+                return await self._search_gazette_via_unvan(turkish)
+            except (NotFoundError, httpx.HTTPStatusError) as exc:
+                if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code != 404:
+                    raise
+                if attempt < 2:
+                    logger.info("search_fallback_retrying", attempt=attempt, query=turkish)
+                    await asyncio.sleep(retry_delay)
+
+        raise original_exc  # type: ignore[misc]
+
+    @staticmethod
+    def _ascii_to_turkish_upper(text: str) -> str:
+        """Convert text to Turkish uppercase, mapping ASCII I to Turkish İ.
+
+        Used as a fallback when the original search fails.  Standard Python
+        ``str.lower()`` turns ``I`` into ``i`` (dotted); ``unicode_tr.upper()``
+        then correctly maps ``i`` to ``İ`` (Turkish dotted capital I).
+        The combining dot above (U+0307) that Python inserts when lowering
+        ``İ`` is stripped so that already-Turkish text round-trips cleanly.
+        """
+        lowered = text.lower().replace("\u0307", "")
+        return str(tr(lowered).upper())
+
+    async def _ensure_auth_with_retry(self) -> None:
+        """Authenticate, and on failure clear session state and retry once."""
+        try:
+            await self._auth.ensure_authenticated()
+        except AuthError:
+            logger.warning("auth_failed_clearing_session_and_retrying")
+            await self._auth.logout()
+            await self._auth.ensure_authenticated()
 
     async def _search_gazette_via_unvan(self, trade_name: str) -> list[GazetteRecord]:
         """Search unvan sorgulama first, then use results to search ilan goruntuleme."""
