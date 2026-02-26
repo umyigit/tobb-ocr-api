@@ -22,16 +22,12 @@ class TestPayloadValidation:
         resp = self.client.post("/api/v1/search", json={"trade_name": "A"})
         assert resp.status_code == 422
 
-    def test_extract_missing_trade_name(self):
+    def test_extract_missing_pdf_url(self):
         resp = self.client.post("/api/v1/extract", json={})
         assert resp.status_code == 422
 
-    def test_extract_max_results_too_high(self):
-        resp = self.client.post("/api/v1/extract", json={"trade_name": "ACME", "max_results": 100})
-        assert resp.status_code == 422
-
-    def test_extract_max_results_too_low(self):
-        resp = self.client.post("/api/v1/extract", json={"trade_name": "ACME", "max_results": 0})
+    def test_extract_pdf_url_too_short(self):
+        resp = self.client.post("/api/v1/extract", json={"pdf_url": "short"})
         assert resp.status_code == 422
 
     def test_health_response_shape(self):

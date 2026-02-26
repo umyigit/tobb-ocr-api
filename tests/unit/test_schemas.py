@@ -7,7 +7,6 @@ from app.schemas.enums import ErrorCode
 from app.schemas.requests import ExtractRequest, SearchRequest
 from app.schemas.responses import (
     ErrorResponse,
-    ExtractResponse,
     ExtractResult,
     GazetteRecord,
     HealthResponse,
@@ -32,24 +31,13 @@ class TestSearchRequest:
 
 
 class TestExtractRequest:
-    def test_defaults(self):
-        req = ExtractRequest(trade_name="ACME LTD")
-        assert req.max_results == 5
+    def test_valid(self):
+        req = ExtractRequest(pdf_url="https://example.com/pdf_goster.php?Guid=abc")
+        assert req.pdf_url == "https://example.com/pdf_goster.php?Guid=abc"
 
-    def test_custom_max(self):
-        req = ExtractRequest(trade_name="ACME LTD", max_results=10)
-        assert req.max_results == 10
-
-    def test_only_trade_name_required(self):
-        req = ExtractRequest(trade_name="ACME LTD")
-        assert req.trade_name == "ACME LTD"
-        assert req.max_results == 5
-
-    def test_max_results_bounds(self):
+    def test_too_short(self):
         with pytest.raises(ValidationError):
-            ExtractRequest(trade_name="ACME LTD", max_results=0)
-        with pytest.raises(ValidationError):
-            ExtractRequest(trade_name="ACME LTD", max_results=21)
+            ExtractRequest(pdf_url="short")
 
 
 class TestSearchRecord:
@@ -130,46 +118,18 @@ class TestExtractResult:
 
     def test_with_all_fields(self):
         r = ExtractResult(
-            trade_name="ACME A.S.",
-            registry_city="Istanbul",
-            registry_no="123456",
-            publication_date="01/01/2024",
-            issue_no="10987",
-            notice_type="KURULUS",
             source_pdf_url="https://example.com/pdf",
             raw_text="sample text",
-            parse_confidence=0.8,
         )
-        assert r.trade_name == "ACME A.S."
-        assert r.registry_city == "Istanbul"
-        assert r.registry_no == "123456"
         assert r.source_pdf_url == "https://example.com/pdf"
         assert r.raw_text == "sample text"
+        assert r.error is None
 
     def test_defaults(self):
         r = ExtractResult()
-        assert r.trade_name is None
+        assert r.source_pdf_url is None
         assert r.raw_text == ""
-        assert r.parse_confidence == 0.0
         assert r.error is None
-
-
-class TestExtractResponse:
-    def test_structure(self):
-        resp = ExtractResponse(
-            query="ACME",
-            total_processed=1,
-            successful=1,
-            results=[
-                ExtractResult(
-                    trade_name="ACME A.S.",
-                    notice_type="KURULUS",
-                    source_pdf_url="http://x",
-                    raw_text="text",
-                )
-            ],
-        )
-        assert resp.successful == 1
 
 
 class TestHealthResponse:

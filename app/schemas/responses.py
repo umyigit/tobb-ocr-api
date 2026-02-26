@@ -48,26 +48,11 @@ class ParsedGazette(BaseModel):
 
 
 class ExtractResult(BaseModel):
-    """PDF spec minimum fields: trade_name, registry_city, registry_no,
-    publication_date, issue_no, notice_type, source_pdf_url, raw_text."""
+    """OCR result from a single gazette PDF."""
 
-    trade_name: str | None = None
-    registry_city: str | None = None
-    registry_no: str | None = None
-    publication_date: str | None = None
-    issue_no: str | None = None
-    notice_type: str | None = None
     source_pdf_url: str | None = None
     raw_text: str = ""
-    parse_confidence: float = Field(default=0.0, ge=0.0, le=1.0)
     error: str | None = None
-
-
-class ExtractResponse(BaseModel):
-    query: str
-    total_processed: int
-    successful: int
-    results: list[ExtractResult]
 
 
 class ErrorResponse(BaseModel):

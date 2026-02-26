@@ -36,13 +36,15 @@ class TestSearchFlow:
                 mudurluk="ISTANBUL",
                 sicil_no="123456",
                 unvan="ACME A.S.",
-                pdf_url="https://www.ticaretsicil.gov.tr/view/hizlierisim/pdf_goster.php?Guid=abc",
+                yayin_tarihi="01/01/2020",
+                pdf_url="https://www.ticaretsicil.gov.tr/view/hizlierisim/pdf_goster.php?Guid=old",
             ),
             GazetteRecord(
                 mudurluk="ISTANBUL",
                 sicil_no="123456",
                 unvan="ACME A.S.",
-                pdf_url="https://www.ticaretsicil.gov.tr/view/hizlierisim/pdf_goster.php?Guid=def",
+                yayin_tarihi="15/06/2024",
+                pdf_url="https://www.ticaretsicil.gov.tr/view/hizlierisim/pdf_goster.php?Guid=new",
             ),
         ]
 
@@ -67,7 +69,9 @@ class TestSearchFlow:
             assert data["results"][0]["registry_no"] == "123456"
             assert data["results"][0]["tsm"] == "ISTANBUL"
             assert len(data["results"][0]["pdf_urls"]) == 2
-            assert "pdf_goster.php?Guid=abc" in data["results"][0]["pdf_urls"][0]
+            # Newest first (2024 before 2020)
+            assert "Guid=new" in data["results"][0]["pdf_urls"][0]
+            assert "Guid=old" in data["results"][0]["pdf_urls"][1]
 
     def test_search_not_found(self):
         with patch("app.services.search_client.SearchClient.search") as mock_search:

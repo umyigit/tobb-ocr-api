@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import unicodedata
+from datetime import datetime
 
 import httpx
 from fastapi import APIRouter, Depends
@@ -11,7 +12,7 @@ from app.api.deps import get_auth_client, get_gazette_client, get_search_client
 from app.core.exceptions import AuthError, NotFoundError
 from app.core.logging import get_logger
 from app.schemas.requests import SearchRequest
-from app.schemas.responses import SearchRecord, SearchResponse
+from app.schemas.responses import GazetteRecord, SearchRecord, SearchResponse
 from app.services.auth_client import AuthClient
 from app.services.gazette_client import GazetteClient
 from app.services.search_client import SearchClient
@@ -21,6 +22,17 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 _RETRY_DELAY = 2.0
+
+
+def _date_sort_key(record: GazetteRecord) -> datetime:
+    """Parse yayin_tarihi (DD/MM/YYYY or DD.MM.YYYY) for sorting. Unknown dates go last."""
+    if not record.yayin_tarihi:
+        return datetime.min
+    try:
+        cleaned = record.yayin_tarihi.replace(".", "/")
+        return datetime.strptime(cleaned, "%d/%m/%Y")
+    except (ValueError, TypeError):
+        return datetime.min
 
 
 @router.post("/search", response_model=SearchResponse)
@@ -52,6 +64,8 @@ async def search(
             sicil_mudurlugu_id=tsm_id,
             tic_sic_no=record.registry_no,
         )
+        # Sort by publication date (newest first) before extracting URLs
+        gazette_records = sorted(gazette_records, key=_date_sort_key, reverse=True)
         record.pdf_urls = [gr.pdf_url for gr in gazette_records if gr.pdf_url]
 
     return SearchResponse(
