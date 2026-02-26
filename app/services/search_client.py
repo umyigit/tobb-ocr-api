@@ -7,7 +7,6 @@ import httpx
 from bs4 import BeautifulSoup
 
 from app.config import Settings
-from app.core.exceptions import NotFoundError
 from app.core.logging import get_logger
 from app.schemas.responses import SearchRecord
 from app.services import selectors
@@ -53,12 +52,6 @@ class SearchClient:
         resp.raise_for_status()
 
         records, total = self._parse_results(resp.text)
-
-        if not records:
-            raise NotFoundError(
-                message=f"'{trade_name}' icin sonuc bulunamadi",
-                detail=f"query={trade_name}",
-            )
 
         logger.info("search_completed", query=trade_name, result_count=len(records), total=total)
         return records, total
