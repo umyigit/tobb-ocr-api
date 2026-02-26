@@ -12,7 +12,6 @@ FROM python:3.11-slim AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
     tesseract-ocr-tur \
-    tesseract-ocr-eng \
     ocrmypdf \
     ghostscript \
     unpaper \

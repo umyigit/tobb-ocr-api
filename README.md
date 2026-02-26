@@ -1,17 +1,17 @@
 # TOBB Trade Registry Gazette OCR REST API
 
-A REST API that searches companies on the TOBB Trade Registry Gazette, downloads the relevant gazette PDFs, processes them with OCR, and returns structured JSON.
+A REST API that searches companies on the TOBB Trade Registry Gazette, downloads the relevant gazette PDFs, processes them with a three-tier OCR pipeline, and returns structured JSON.
 
 ## Features
 
-- **Trade Name Search**: Search the TOBB Trade Registry Gazette by trade name
-- **PDF OCR**: Two-tier OCR pipeline (pdfplumber text layer + OCRmyPDF fallback)
-- **Structured Output**: Automatically extracts registry city, registry no, publication date, issue no, notice type
-- **CAPTCHA Solving**: Ethical local Tesseract OCR captcha solving (no third-party services)
+- **Trade Name Search**: Search the TOBB Trade Registry Gazette by trade name, enriched with gazette PDF URLs
+- **PDF OCR**: Three-tier OCR pipeline (pdfplumber text layer → column-aware pytesseract → OCRmyPDF fallback)
+- **Column Detection**: Automatic multi-column layout detection and per-column OCR with OpenCV preprocessing
+- **CAPTCHA Solving**: Local Tesseract OCR captcha solving (no third-party services)
 - **Automatic Session Management**: PHP session tracking, 30min TTL, automatic re-authentication
 - **Resilient Auth**: Login retries with cookie cleanup between attempts; session-level re-auth on failure
 - **Turkish Character Normalization**: Unicode NFC normalization for external systems (n8n, etc.) and automatic I→İ fallback via `unicode_tr`
-- **Search Retry**: Both `/search` and `/extract` retry each query twice with delay; if not found, retried with Turkish uppercase conversion (ASCII I→İ)
+- **Search Retry**: Search retries with delay; if not found, retried with Turkish uppercase conversion (ASCII I→İ)
 - **PDF Re-auth**: If a PDF fetch returns HTML instead of PDF (expired session), the system re-authenticates and retries
 - **Partial Failure Tolerance**: A single PDF failure does not stop the entire batch
 - **Easy Docker Deployment**: Up and running with a single command
@@ -19,7 +19,7 @@ A REST API that searches companies on the TOBB Trade Registry Gazette, downloads
 ## Requirements
 
 - Python 3.11+
-- Tesseract OCR (`tesseract-ocr`, `tesseract-ocr-tur`, `tesseract-ocr-eng`)
+- Tesseract OCR (`tesseract-ocr`, `tesseract-ocr-tur`)
 - OCRmyPDF, Ghostscript, Unpaper
 - TOBB Trade Registry Gazette membership credentials (email + password)
 
@@ -58,7 +58,7 @@ docker run -p 8000:8000 tobb-ocr-api
 
 ```bash
 # System dependencies (Ubuntu/Debian)
-sudo apt install tesseract-ocr tesseract-ocr-tur tesseract-ocr-eng ocrmypdf ghostscript unpaper
+sudo apt install tesseract-ocr tesseract-ocr-tur ocrmypdf ghostscript unpaper
 
 # Python environment
 python3 -m venv .venv
@@ -86,13 +86,18 @@ All settings are managed via the `.env` file:
 | `MAX_RETRIES` | `3` | Max HTTP retries |
 | `BACKOFF_FACTOR` | `0.5` | Exponential backoff factor |
 | `VERIFY_SSL` | `false` | SSL verification |
-| `OCR_LANG` | `tur+eng` | Tesseract language(s) |
-| `MAX_PDF_MB` | `20` | Max PDF size (MB) |
 | `RATE_LIMIT_DELAY` | `1.0` | Delay between requests (seconds) |
+| `OCR_LANG` | `tur` | Tesseract language |
+| `OCR_DPI` | `300` | Image render resolution for OCR |
+| `OCR_COLUMN_DETECTION` | `true` | Enable multi-column layout detection |
+| `OCR_MIN_COLUMN_GAP_PX` | `4` | Minimum pixel gap to detect column boundary |
+| `OCR_BINARIZE_BLOCK_SIZE` | `31` | Adaptive threshold block size |
+| `OCR_DENOISE_STRENGTH` | `10` | OpenCV denoising strength |
+| `MAX_PDF_MB` | `20` | Max PDF size (MB) |
 | `CAPTCHA_MAX_ATTEMPTS` | `5` | Max captcha attempts |
 | `LOG_LEVEL` | `INFO` | Log level |
-| `PDF_DOWNLOAD_DIR` | `/tmp/tobb_pdfs` | Temporary PDF directory |
 | `DEBUG` | `false` | Debug mode |
+| `PDF_DOWNLOAD_DIR` | `/tmp/tobb_pdfs` | Temporary PDF directory |
 
 ## API Usage
 
@@ -118,6 +123,7 @@ curl -X POST http://localhost:8000/api/v1/search \
 {
   "query": "ALTINKAYA ELEKTRONİK",
   "total_results": 1,
+  "total_records": 5,
   "results": [
     {
       "title": "ALTINKAYA ELEKTRONİK CİHAZ KUTULARI SANAYİ TİCARET ANONİM ŞİRKETİ",
@@ -132,36 +138,49 @@ curl -X POST http://localhost:8000/api/v1/search \
 }
 ```
 
-### Full Extraction (Search + PDF + OCR + Parse)
+### PDF Text Extraction (OCR)
 
-Just provide the `trade_name` and the system handles the rest (login -> search -> PDF download -> OCR -> parse).
+Provide a `pdf_url` from the search results and the system handles the rest (login → PDF download → OCR → raw text).
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/extract \
   -H "Content-Type: application/json" \
-  -d '{"trade_name": "ALTINKAYA ELEKTRONİK"}'
+  -d '{"pdf_url": "https://www.ticaretsicil.gov.tr/view/hizlierisim/pdf_goster.php?Guid=abc-123"}'
 ```
 
 ```json
 {
-  "query": "ALTINKAYA ELEKTRONİK",
-  "total_processed": 3,
-  "successful": 2,
-  "results": [
-    {
-      "trade_name": "ALTINKAYA ELEKTRONİK CİHAZ KUTULARI SANAYİ TİCARET ANONİM ŞİRKETİ",
-      "registry_city": "Ankara",
-      "registry_no": "123456",
-      "publication_date": "15/03/2024",
-      "issue_no": "10987",
-      "notice_type": "KURULUS",
-      "source_pdf_url": "https://www.ticaretsicil.gov.tr/view/hizlierisim/pdf_goster.php?Guid=abc-123",
-      "raw_text": "Ticaret Sicil Mudurlugu: Ankara ...",
-      "parse_confidence": 0.8,
-      "error": null
-    }
-  ]
+  "source_pdf_url": "https://www.ticaretsicil.gov.tr/view/hizlierisim/pdf_goster.php?Guid=abc-123",
+  "raw_text": "Ticaret Sicil Mudurlugu: Ankara ...",
+  "error": null
 }
+```
+
+## OCR Pipeline
+
+The OCR pipeline uses a three-tier fallback strategy:
+
+```
+PDF bytes
+  │
+  ▼
+Tier 1: pdfplumber (text layer extraction, layout-aware)
+  │  ≥50 chars? → Done
+  ▼
+Tier 2: Column-aware pytesseract
+  │  1. Render page to image (300 DPI)
+  │  2. Detect columns via vertical density analysis (OpenCV)
+  │  3. Split into column images
+  │  4. Preprocess each column:
+  │     - Grayscale → Denoise → Adaptive binarization → Morphological closing
+  │  5. Tesseract OCR per column (--psm 6 --oem 1, lang=tur)
+  │  ≥50 chars? → Done
+  ▼
+Tier 3: OCRmyPDF subprocess fallback
+  │  --force-ocr --deskew --clean --language tur
+  │  timeout=120s
+  ▼
+Raw text result
 ```
 
 ## Error Codes
@@ -176,6 +195,7 @@ All errors are returned as deterministic JSON:
 | `PARSING_FAILED` | 422 | Structured fields could not be extracted |
 | `CAPTCHA_FAILED` | 503 | CAPTCHA could not be solved |
 | `AUTH_FAILED` | 401 | TOBB login failed |
+| `INTERNAL_ERROR` | 500 | Unexpected internal error |
 
 Example error response:
 
@@ -188,33 +208,34 @@ Example error response:
 ```
 Client
   │
-  ▼
-api (FastAPI endpoints, validation, JSON response)
+  ├─ POST /search ──► search_client ─► captcha_handler ──► Tesseract OCR
+  │                     └── gazette_client (enriches results with PDF URLs)
   │
-  ▼
-extractor (orchestrator, retry logic, Turkish normalization)
-  ├── auth_client ──► captcha_handler ──► Tesseract OCR
-  │     └── login retry with cookie cleanup + session-level re-auth
-  ├── search_client ─► captcha_handler
-  │     └── search retry on both /search and /extract (x2 original, x2 I→İ fallback, 2s delay)
-  ├── pdf_fetcher
-  │     └── re-auth on expired session (HTML instead of PDF)
-  └── ocr_pipeline ──► pdfplumber (Tier 1) / OCRmyPDF (Tier 2)
-        │
-        ▼
-      parser (regex-based structured field extraction)
+  └─ POST /extract ─► extractor (orchestrator)
+                        ├── auth_client ──► captcha_handler ──► Tesseract OCR
+                        │     └── login retry with cookie cleanup + session-level re-auth
+                        ├── pdf_fetcher
+                        │     └── re-auth on expired session (HTML instead of PDF)
+                        └── ocr_pipeline
+                              ├── Tier 1: pdfplumber (text layer)
+                              ├── Tier 2: Pillow + OpenCV + pytesseract (column-aware image OCR)
+                              └── Tier 3: OCRmyPDF subprocess (fallback)
 ```
 
 | Layer | File | Responsibility |
 |---|---|---|
 | api | `app/api/` | Endpoint definitions, validation, dependency injection |
-| auth_client | `app/services/auth_client.py` | TOBB login flow |
+| auth_client | `app/services/auth_client.py` | TOBB login flow, session management |
 | captcha_handler | `app/services/captcha_handler.py` | Captcha fetch, preprocess, OCR |
-| search_client | `app/services/search_client.py` | Trade name search, HTML parsing |
-| pdf_fetcher | `app/services/pdf_fetcher.py` | Authenticated PDF download |
-| ocr_pipeline | `app/services/ocr_pipeline.py` | Two-tier OCR |
-| parser | `app/services/parser.py` | Raw text -> structured fields |
-| extractor | `app/services/extractor.py` | Main workflow orchestrating all services, search retry, Turkish normalization |
+| search_client | `app/services/search_client.py` | Public trade name search, HTML parsing |
+| gazette_client | `app/services/gazette_client.py` | Authenticated gazette search, PDF URL enrichment |
+| pdf_fetcher | `app/services/pdf_fetcher.py` | Authenticated PDF download (7 fallback strategies) |
+| ocr_pipeline | `app/services/ocr_pipeline.py` | Three-tier OCR pipeline |
+| parser | `app/services/parser.py` | Raw text → structured fields (regex-based) |
+| extractor | `app/services/extractor.py` | Orchestrator: auth → PDF fetch → OCR |
+| tsm_mapping | `app/services/tsm_mapping.py` | City name to SicilMudurluguId mapping (250+ cities) |
+| session_manager | `app/clients/session_manager.py` | PHP session lifecycle (30min TTL) |
+| image_processing | `app/utils/image_processing.py` | Column detection, denoising, binarization |
 
 ## Tests
 
@@ -243,12 +264,38 @@ tobb-ocr-rest-api/
 │   │   ├── router.py            # Top-level router
 │   │   ├── deps.py              # FastAPI dependency injection
 │   │   └── v1/                  # health, search, extract endpoints
-│   ├── schemas/                 # Pydantic request/response models
-│   ├── services/                # Business logic layers
-│   ├── clients/                 # HTTP client factory, session manager
-│   ├── core/                    # Exceptions, logging, middleware
-│   └── utils/                   # UA rotation, retry, image processing
-├── tests/                       # unit, integration, contract tests
+│   ├── schemas/
+│   │   ├── requests.py          # SearchRequest, ExtractRequest
+│   │   ├── responses.py         # SearchResponse, ExtractResult, etc.
+│   │   └── enums.py             # ErrorCode, NoticeType
+│   ├── services/
+│   │   ├── auth_client.py       # TOBB login flow
+│   │   ├── search_client.py     # Public company search
+│   │   ├── gazette_client.py    # Authenticated gazette search
+│   │   ├── pdf_fetcher.py       # PDF download
+│   │   ├── ocr_pipeline.py      # Three-tier OCR
+│   │   ├── captcha_handler.py   # Captcha solving
+│   │   ├── parser.py            # Structured field extraction
+│   │   ├── extractor.py         # Main orchestrator
+│   │   ├── tsm_mapping.py       # City ID mapping
+│   │   └── selectors.py         # CSS selectors
+│   ├── clients/
+│   │   ├── http_client.py       # httpx AsyncClient factory
+│   │   └── session_manager.py   # PHP session lifecycle
+│   ├── core/
+│   │   ├── exceptions.py        # Custom exception hierarchy
+│   │   ├── logging.py           # structlog setup
+│   │   └── middleware.py        # Global exception handler
+│   └── utils/
+│       ├── image_processing.py  # OCR image preprocessing
+│       ├── ua_rotation.py       # User-Agent rotation
+│       └── retry.py             # Retry utilities
+├── tests/
+│   ├── unit/                    # Unit tests
+│   ├── integration/             # Integration tests
+│   ├── contract/                # API contract tests
+│   ├── fixtures/                # Test fixtures
+│   └── conftest.py
 ├── docker/
 │   ├── Dockerfile               # Multi-stage build
 │   └── docker-compose.yml

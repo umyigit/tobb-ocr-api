@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     RATE_LIMIT_DELAY: float = 1.0
 
     # OCR
-    OCR_LANG: str = "tur+eng"
+    OCR_LANG: str = "tur"
     MAX_PDF_MB: int = 20
     OCR_DPI: int = 300
     OCR_COLUMN_DETECTION: bool = True

@@ -12,7 +12,7 @@ from app.services.ocr_pipeline import OCRPipeline
 
 @pytest.fixture
 def pipeline():
-    settings = Settings(OCR_LANG="tur+eng")
+    settings = Settings(OCR_LANG="tur")
     return OCRPipeline(settings=settings)
 
 
