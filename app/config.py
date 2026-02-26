@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     # OCR
     OCR_LANG: str = "tur+eng"
     MAX_PDF_MB: int = 20
+    OCR_DPI: int = 300
+    OCR_COLUMN_DETECTION: bool = True
+    OCR_MIN_COLUMN_GAP_PX: int = 4
+    OCR_BINARIZE_BLOCK_SIZE: int = 31
+    OCR_DENOISE_STRENGTH: int = 10
 
     # CAPTCHA
     CAPTCHA_MAX_ATTEMPTS: int = 5
